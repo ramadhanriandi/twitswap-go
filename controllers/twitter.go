@@ -22,6 +22,8 @@ var (
 
 /* Get stream for tweets */
 func (t *TwitterController) GetStream() {
+	defer wg.Done()
+
 	authorizationBearer := "Bearer " + os.Getenv("TWITTER_AUTH_BEARER")
 	client := &http.Client{}
 
@@ -29,12 +31,18 @@ func (t *TwitterController) GetStream() {
 	req.Header.Add("Authorization", authorizationBearer)
 
 	resp, _ := client.Do(req)
-
 	reader := bufio.NewReader(resp.Body)
 
 	for {
-		line, _ := reader.ReadBytes('\n')
-		fmt.Println(string(line))
+		select {
+		case <-quit:
+			defer resp.Body.Close()
+			fmt.Print("Stop streaming...")
+			return
+		default:
+			line, _ := reader.ReadBytes('\n')
+			fmt.Print(string(line))
+		}
 	}
 }
 

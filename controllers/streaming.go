@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 
@@ -20,6 +21,12 @@ var (
 
 	// Twitter controller
 	twitterController = new(TwitterController)
+
+	// Wait group
+	wg = &sync.WaitGroup{}
+
+	// Channel
+	quit chan struct{}
 )
 
 /* Start the streaming */
@@ -28,6 +35,7 @@ func (s *StreamingController) StartStreaming(c *gin.Context) {
 	var requestBody request.StartStreaming
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
 			"message": errInvalidRequest.Error(),
 			"error":   err.Error(),
 		})
@@ -51,28 +59,22 @@ func (s *StreamingController) StartStreaming(c *gin.Context) {
 	fmt.Println("Delete all existed rules if any")
 
 	// Post the received rule
-	twitterController.PostRules([]string{requestBody.Rule})
+	postRulesResp, _ := twitterController.PostRules([]string{requestBody.Rule})
 	fmt.Println("Post the received rule")
 
 	// Start streaming
+	wg.Add(1)
+	quit = make(chan struct{})
 	go twitterController.GetStream()
+	fmt.Println("Start streaming (goroutine)")
 
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully start streaming"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "rule_id": postRulesResp.Data[0].Id})
 }
 
 /* Stop the streaming */
 func (s *StreamingController) StopStreaming(c *gin.Context) {
-	var data request.StopStreaming
-
-	// Request body validation
-	if err := c.ShouldBindJSON(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": errInvalidRequest.Error(),
-			"error":   err.Error(),
-		})
-
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully stop streaming"})
+	// cancel()
+	close(quit)
+	wg.Wait()
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
