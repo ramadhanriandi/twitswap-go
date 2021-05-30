@@ -2,12 +2,16 @@ package controllers
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/segmentio/kafka-go"
 
 	"twitswap-go/request"
 	"twitswap-go/response"
@@ -16,14 +20,26 @@ import (
 type TwitterController struct{}
 
 var (
+	// Twitter API v2 URLs
 	streamURL string = "https://api.twitter.com/2/tweets/search/stream"
 	rulesURL  string = "https://api.twitter.com/2/tweets/search/stream/rules"
+
+	// Kafka configurations
+	topic     = "raw-tweet-topic"
+	partition = 0
 )
 
 /* Get stream for tweets */
 func (t *TwitterController) GetStream() {
 	defer wg.Done()
 
+	// Kafka producer setup
+	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", topic, partition)
+	if err != nil {
+		log.Fatal("failed to dial leader:", err)
+	}
+
+	// HTTP request setup
 	authorizationBearer := "Bearer " + os.Getenv("TWITTER_AUTH_BEARER")
 	client := &http.Client{}
 
@@ -35,13 +51,34 @@ func (t *TwitterController) GetStream() {
 
 	for {
 		select {
+		// When receive quit channel, stop streaming
 		case <-quit:
+			// Close HTTP connection
 			defer resp.Body.Close()
+
+			// Close Kafka connection
+			if err := conn.Close(); err != nil {
+				log.Fatal("failed to close writer:", err)
+			}
+
 			fmt.Print("Stop streaming...")
 			return
+
 		default:
-			line, _ := reader.ReadBytes('\n')
-			fmt.Print(string(line))
+			// Read the response
+			tweet, _ := reader.ReadBytes('\n')
+			line := string(tweet)
+
+			fmt.Print(line)
+
+			// Send raw tweet to Kafka topic
+			_, err = conn.WriteMessages(
+				kafka.Message{Value: []byte(line)},
+			)
+
+			if err != nil {
+				log.Fatal("Failed to write messages:", err)
+			}
 		}
 	}
 }

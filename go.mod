@@ -9,4 +9,5 @@ require (
 	github.com/joho/godotenv v1.3.0 // indirect
 	github.com/nanmu42/gzip v1.1.0
 	github.com/rs/cors v1.7.0
+	github.com/segmentio/kafka-go v0.4.16
 )
