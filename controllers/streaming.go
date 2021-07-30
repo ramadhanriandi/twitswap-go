@@ -26,6 +26,7 @@ var (
 	errFailedPostRule          = errors.New("failed to post rule")
 	errFailedInsertRuleDB      = errors.New("failed to insert rule into DB")
 	errFailedInsertStreamingDB = errors.New("failed to insert streaming into DB")
+	errFailedUpdateStreamingDB = errors.New("failed to update streaming in DB")
 	errFailedStartStreaming    = errors.New("failed to start streaming")
 	errFailedStopStreaming     = errors.New("failed to stop streaming")
 
@@ -136,7 +137,7 @@ func (s *StreamingController) StartStreaming(c *gin.Context) {
 
 	fmt.Println("Store rule and streaming data into DB")
 
-	// Start streaming
+	// Start the streaming goroutine
 	wg.Add(1)
 	quit = make(chan struct{})
 	go twitterController.GetStream()
@@ -156,6 +157,36 @@ func (s *StreamingController) StartStreaming(c *gin.Context) {
 
 /* Stop the streaming */
 func (s *StreamingController) StopStreaming(c *gin.Context) {
+	var err error
+
+	// Request body validation
+	var requestBody request.StopStreaming
+	err = c.ShouldBindJSON(&requestBody)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errInvalidRequest.Error(),
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Update the streaming end time in DB
+	db := dbConn.OpenConnection()
+	defer db.Close()
+
+	streamingQuery := "UPDATE streamings SET end_time = $1 WHERE id = $2"
+	_, err = db.Exec(streamingQuery, time.Now(), requestBody.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedUpdateStreamingDB.Error(),
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Stop the streaming goroutine
 	close(quit)
 	wg.Wait()
 	c.JSON(http.StatusOK, gin.H{"success": true})
