@@ -7,6 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.7.2
 	github.com/gorilla/mux v1.8.0
 	github.com/joho/godotenv v1.3.0 // indirect
+	github.com/lib/pq v1.10.2
 	github.com/nanmu42/gzip v1.1.0
 	github.com/rs/cors v1.7.0
 	github.com/segmentio/kafka-go v0.4.16
