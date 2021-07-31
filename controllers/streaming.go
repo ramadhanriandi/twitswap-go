@@ -20,15 +20,16 @@ type StreamingController struct{}
 
 var (
 	// Errors
-	errInvalidRequest          = errors.New("invalid request body")
-	errFailedGetRules          = errors.New("failed to get rules")
-	errFailedDeleteRule        = errors.New("failed to delete rule")
-	errFailedPostRule          = errors.New("failed to post rule")
-	errFailedInsertRuleDB      = errors.New("failed to insert rule into DB")
-	errFailedInsertStreamingDB = errors.New("failed to insert streaming into DB")
-	errFailedUpdateStreamingDB = errors.New("failed to update streaming in DB")
-	errFailedStartStreaming    = errors.New("failed to start streaming")
-	errFailedStopStreaming     = errors.New("failed to stop streaming")
+	errInvalidRequest             = errors.New("invalid request body")
+	errFailedGetRules             = errors.New("failed to get rules")
+	errFailedDeleteRule           = errors.New("failed to delete rule")
+	errFailedPostRule             = errors.New("failed to post rule")
+	errFailedInsertRuleDB         = errors.New("failed to insert rule into DB")
+	errFailedGetLatestStreamingDB = errors.New("failed to get latest streaming in DB")
+	errFailedInsertStreamingDB    = errors.New("failed to insert streaming into DB")
+	errFailedUpdateStreamingDB    = errors.New("failed to update streaming in DB")
+	errFailedStartStreaming       = errors.New("failed to start streaming")
+	errFailedStopStreaming        = errors.New("failed to stop streaming")
 
 	// Twitter controller
 	twitterController = new(TwitterController)
@@ -190,4 +191,29 @@ func (s *StreamingController) StopStreaming(c *gin.Context) {
 	close(quit)
 	wg.Wait()
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+/* Get the latest streaming */
+func (s *StreamingController) GetLatestStreaming(c *gin.Context) {
+	// Get the latest streaming data from DB
+	db := dbConn.OpenConnection()
+	defer db.Close()
+
+	var resp response.GetLatestStreaming
+
+	streamingQuery := "SELECT streamings.id, name, start_time, end_time, rule_id, value FROM streamings INNER JOIN rules ON streamings.rule_id = rules.id ORDER BY start_time DESC LIMIT 1"
+	err := db.QueryRow(streamingQuery).Scan(&resp.ID, &resp.Name, &resp.StartTime, &resp.EndTime, &resp.RuleID, &resp.Rule)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetLatestStreamingDB.Error(),
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    resp,
+	})
 }
