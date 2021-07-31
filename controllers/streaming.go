@@ -25,6 +25,7 @@ var (
 	errFailedDeleteRule           = errors.New("failed to delete rule")
 	errFailedPostRule             = errors.New("failed to post rule")
 	errFailedInsertRuleDB         = errors.New("failed to insert rule into DB")
+	errFailedGetAllStreamingDB    = errors.New("failed to get all streaming in DB")
 	errFailedGetLatestStreamingDB = errors.New("failed to get latest streaming in DB")
 	errFailedInsertStreamingDB    = errors.New("failed to insert streaming into DB")
 	errFailedUpdateStreamingDB    = errors.New("failed to update streaming in DB")
@@ -210,6 +211,47 @@ func (s *StreamingController) GetLatestStreaming(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    resp,
+	})
+}
+
+/* Get all streaming */
+func (s *StreamingController) GetAllStreaming(c *gin.Context) {
+	// Get all streaming data from DB
+	db := dbConn.OpenConnection()
+	defer db.Close()
+
+	rows, err := db.Query("SELECT streamings.id, name, start_time, end_time, rule_id, value FROM streamings INNER JOIN rules ON streamings.rule_id = rules.id ORDER BY start_time DESC")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetAllStreamingDB.Error(),
+			"error":   err.Error(),
+		})
+		return
+	}
+	defer rows.Close()
+
+	resp := []response.GetAllStreaming{}
+
+	for rows.Next() {
+		var data response.GetAllStreaming
+
+		err := rows.Scan(&data.ID, &data.Name, &data.StartTime, &data.EndTime, &data.RuleID, &data.Rule)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": errFailedGetAllStreamingDB.Error(),
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		resp = append(resp, data)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

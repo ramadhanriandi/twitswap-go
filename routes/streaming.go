@@ -10,5 +10,6 @@ func streamingRouter(r *gin.RouterGroup) {
 		streaming.POST("/start", streamingController.StartStreaming)
 		streaming.POST("/stop", streamingController.StopStreaming)
 		streaming.GET("/latest", streamingController.GetLatestStreaming)
+		streaming.GET("/all", streamingController.GetAllStreaming)
 	}
 }
