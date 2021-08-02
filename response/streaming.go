@@ -30,3 +30,12 @@ type GetAllStreaming struct {
 	RuleID    string       `json:"rule_id"`
 	Rule      string       `json:"rule"`
 }
+
+type GetStreamingByID struct {
+	ID        int64        `json:"id"`
+	Name      string       `json:"name"`
+	StartTime time.Time    `json:"start_time"`
+	EndTime   sql.NullTime `json:"end_time"`
+	RuleID    string       `json:"rule_id"`
+	Rule      string       `json:"rule"`
+}

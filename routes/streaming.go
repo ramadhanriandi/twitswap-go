@@ -11,5 +11,6 @@ func streamingRouter(r *gin.RouterGroup) {
 		streaming.POST("/stop", streamingController.StopStreaming)
 		streaming.GET("/latest", streamingController.GetLatestStreaming)
 		streaming.GET("/all", streamingController.GetAllStreaming)
+		streaming.GET("/:id", streamingController.GetStreamingByID)
 	}
 }
