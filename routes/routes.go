@@ -7,9 +7,11 @@ import (
 )
 
 var (
+	ruleController      = new(controllers.RuleController)
 	streamingController = new(controllers.StreamingController)
 )
 
 func SetupRouter(router *gin.Engine, routerGroup *gin.RouterGroup) {
+	ruleRouter(routerGroup)
 	streamingRouter(routerGroup)
 }

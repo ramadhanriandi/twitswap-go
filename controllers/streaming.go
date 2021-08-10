@@ -261,7 +261,7 @@ func (s *StreamingController) GetAllStreaming(c *gin.Context) {
 	})
 }
 
-/* Get the latest streaming */
+/* Get streaming by ID */
 func (s *StreamingController) GetStreamingByID(c *gin.Context) {
 	// Get streaming ID from the path variable
 	streamingID := c.Param("id")
