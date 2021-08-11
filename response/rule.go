@@ -10,6 +10,7 @@ type GetVisualizationByRuleID struct {
 	TweetLanguages    TweetLanguage      `json:"tweet_languages"`
 	TweetMetrics      TweetMetric        `json:"tweet_metrics"`
 	TweetPopularities []TweetPopularity  `json:"tweet_popularities"`
+	TweetTypes        TweetType          `json:"tweet_types"`
 }
 
 type TweetAnnotation struct {
@@ -61,4 +62,24 @@ type TweetMetricCumulative struct {
 type TweetPopularity struct {
 	TweetID string `json:"tweet_id"`
 	Count   int64  `json:"count"`
+}
+
+type TweetType struct {
+	Cumulative TweetTypeCumulative `json:"cumulative"`
+	Interval   []TweetTypeInterval `json:"interval"`
+}
+
+type TweetTypeInterval struct {
+	Tweet     int64     `json:"tweet"`
+	Retweet   int64     `json:"retweet"`
+	Quote     int64     `json:"quote"`
+	Reply     int64     `json:"reply"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type TweetTypeCumulative struct {
+	Tweet   int64 `json:"tweet"`
+	Retweet int64 `json:"retweet"`
+	Quote   int64 `json:"quote"`
+	Reply   int64 `json:"reply"`
 }

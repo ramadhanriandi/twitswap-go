@@ -24,6 +24,7 @@ var (
 	errFailedGetTweetLanguagesDB    = errors.New("failed to get tweet languages from DB")
 	errFailedGetTweetMetricsDB      = errors.New("failed to get tweet metrics from DB")
 	errFailedGetTweetPopularitiesDB = errors.New("failed to get tweet popularities from DB")
+	errFailedGetTweetTypesDB        = errors.New("failed to get tweet types from DB")
 	errFailedParseTime              = errors.New("failed to parse time from query parameter")
 
 	// Limit
@@ -277,6 +278,56 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		}
 
 		resp.TweetPopularities = append(resp.TweetPopularities, data)
+	}
+
+	// Get tweet types
+	tweetTypeCumulativeQuery := "SELECT COALESCE(SUM(tweet_count), 0), COALESCE(SUM(retweet_count), 0), COALESCE(SUM(quote_count), 0), COALESCE(SUM(reply_count), 0) FROM tweet_types WHERE rule_id = $1 AND created_at <= $2"
+	tweetTypeCumulativeErr := db.QueryRow(tweetTypeCumulativeQuery, ruleID, latestTime).
+		Scan(
+			&resp.TweetTypes.Cumulative.Tweet,
+			&resp.TweetTypes.Cumulative.Retweet,
+			&resp.TweetTypes.Cumulative.Quote,
+			&resp.TweetTypes.Cumulative.Reply,
+		)
+	if tweetTypeCumulativeErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetTypesDB.Error(),
+			"error":   tweetTypeCumulativeErr.Error(),
+		})
+		return
+	}
+
+	tweetTypeIntervalRows, tweetTypeIntervalErr := db.Query(
+		"SELECT tweet_count, retweet_count, quote_count, reply_count, created_at FROM tweet_types WHERE rule_id = $1 AND created_at <= $2 ORDER BY created_at DESC LIMIT $3",
+		ruleID,
+		latestTime,
+		commonRowsLimit,
+	)
+	if tweetTypeIntervalErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetTypesDB.Error(),
+			"error":   tweetTypeIntervalErr.Error(),
+		})
+		return
+	}
+	defer tweetTypeIntervalRows.Close()
+
+	for tweetTypeIntervalRows.Next() {
+		var data response.TweetTypeInterval
+
+		err := tweetTypeIntervalRows.Scan(&data.Tweet, &data.Retweet, &data.Quote, &data.Reply, &data.CreatedAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": errFailedGetTweetTypesDB.Error(),
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		resp.TweetTypes.Interval = append(resp.TweetTypes.Interval, data)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
