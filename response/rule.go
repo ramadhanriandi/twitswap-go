@@ -5,6 +5,7 @@ type GetVisualizationByRuleID struct {
 	TweetDomains      []TweetDomain      `json:"tweet_domains"`
 	TweetGeolocations []TweetGeolocation `json:"tweet_geolocations"`
 	TweetHashtags     []TweetHashtag     `json:"tweet_hashtags"`
+	TweetLanguages    TweetLanguage      `json:"tweet_languages"`
 }
 
 type TweetAnnotation struct {
@@ -25,4 +26,10 @@ type TweetGeolocation struct {
 type TweetHashtag struct {
 	Name  string `json:"name"`
 	Count int64  `json:"count"`
+}
+
+type TweetLanguage struct {
+	En    int64 `json:"en"`
+	In    int64 `json:"in"`
+	Other int64 `json:"other"`
 }

@@ -21,6 +21,7 @@ var (
 	errFailedGetTweetDomainsDB      = errors.New("failed to get tweet domains from DB")
 	errFailedGetTweetGeolocationsDB = errors.New("failed to get tweet geolocations from DB")
 	errFailedGetTweetHashtagsDB     = errors.New("failed to get tweet hashtags from DB")
+	errFailedGetTweetLanguagesDB    = errors.New("failed to get tweet languages from DB")
 	errFailedParseTime              = errors.New("failed to parse time from query parameter")
 
 	// Limit
@@ -176,6 +177,18 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		}
 
 		resp.TweetHashtags = append(resp.TweetHashtags, data)
+	}
+
+	// Get tweet languages
+	tweetLanguageQuery := "SELECT SUM(en_count), SUM(in_count), SUM(other_count) FROM tweet_languages WHERE rule_id = $1"
+	tweetLanguageErr := db.QueryRow(tweetLanguageQuery, ruleID).Scan(&resp.TweetLanguages.En, &resp.TweetLanguages.In, &resp.TweetLanguages.Other)
+	if tweetLanguageErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetLanguagesDB.Error(),
+			"error":   tweetLanguageErr.Error(),
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
