@@ -17,9 +17,10 @@ type RuleController struct{}
 
 var (
 	// Errors
-	errFailedGetTweetAnnotationsDB = errors.New("failed to get tweet annotations from DB")
-	errFailedGetTweetDomainsDB     = errors.New("failed to get tweet domains from DB")
-	errFailedParseTime             = errors.New("failed to parse time from query parameter")
+	errFailedGetTweetAnnotationsDB  = errors.New("failed to get tweet annotations from DB")
+	errFailedGetTweetDomainsDB      = errors.New("failed to get tweet domains from DB")
+	errFailedGetTweetGeolocationsDB = errors.New("failed to get tweet geolocations from DB")
+	errFailedParseTime              = errors.New("failed to parse time from query parameter")
 
 	// Limit
 	rowsLimit = 20
@@ -110,6 +111,37 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		}
 
 		resp.TweetDomains = append(resp.TweetDomains, data)
+	}
+
+	// Get tweet geolocations
+	tweetGeolocationRows, tweetGeolocationErr := db.Query(
+		"SELECT DISTINCT lat, long FROM tweet_geolocations WHERE rule_id = $1",
+		ruleID,
+	)
+	if tweetGeolocationErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetGeolocationsDB.Error(),
+			"error":   tweetGeolocationErr.Error(),
+		})
+		return
+	}
+	defer tweetGeolocationRows.Close()
+
+	for tweetGeolocationRows.Next() {
+		var data response.TweetGeolocation
+
+		err := tweetGeolocationRows.Scan(&data.Lat, &data.Long)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": errFailedGetTweetGeolocationsDB.Error(),
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		resp.TweetGeolocations = append(resp.TweetGeolocations, data)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
