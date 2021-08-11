@@ -20,6 +20,7 @@ var (
 	errFailedGetTweetAnnotationsDB  = errors.New("failed to get tweet annotations from DB")
 	errFailedGetTweetDomainsDB      = errors.New("failed to get tweet domains from DB")
 	errFailedGetTweetGeolocationsDB = errors.New("failed to get tweet geolocations from DB")
+	errFailedGetTweetHashtagsDB     = errors.New("failed to get tweet hashtags from DB")
 	errFailedParseTime              = errors.New("failed to parse time from query parameter")
 
 	// Limit
@@ -142,6 +143,39 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		}
 
 		resp.TweetGeolocations = append(resp.TweetGeolocations, data)
+	}
+
+	// Get tweet hashtags
+	tweetHashtagRows, tweetHashtagErr := db.Query(
+		"SELECT name, SUM(count) AS total FROM tweet_hashtags WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
+		ruleID,
+		latestTime,
+		rowsLimit,
+	)
+	if tweetHashtagErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetHashtagsDB.Error(),
+			"error":   tweetHashtagErr.Error(),
+		})
+		return
+	}
+	defer tweetHashtagRows.Close()
+
+	for tweetHashtagRows.Next() {
+		var data response.TweetHashtag
+
+		err := tweetHashtagRows.Scan(&data.Name, &data.Count)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": errFailedGetTweetHashtagsDB.Error(),
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		resp.TweetHashtags = append(resp.TweetHashtags, data)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
