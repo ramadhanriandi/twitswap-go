@@ -23,10 +23,12 @@ var (
 	errFailedGetTweetHashtagsDB     = errors.New("failed to get tweet hashtags from DB")
 	errFailedGetTweetLanguagesDB    = errors.New("failed to get tweet languages from DB")
 	errFailedGetTweetMetricsDB      = errors.New("failed to get tweet metrics from DB")
+	errFailedGetTweetPopularitiesDB = errors.New("failed to get tweet popularities from DB")
 	errFailedParseTime              = errors.New("failed to parse time from query parameter")
 
 	// Limit
-	rowsLimit = 20
+	commonRowsLimit     = 20
+	popularityRowsLimit = 3
 )
 
 /* Get the visualization data by rule ID */
@@ -55,7 +57,7 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		"SELECT name, COALESCE(SUM(count), 0)  AS total FROM tweet_annotations WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
 		ruleID,
 		latestTime,
-		rowsLimit,
+		commonRowsLimit,
 	)
 	if tweetAnnotationErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -88,7 +90,7 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		"SELECT name, COALESCE(SUM(count), 0) AS total FROM tweet_domains WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
 		ruleID,
 		latestTime,
-		rowsLimit,
+		commonRowsLimit,
 	)
 	if tweetDomainErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -153,7 +155,7 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		"SELECT name, COALESCE(SUM(count), 0) AS total FROM tweet_hashtags WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
 		ruleID,
 		latestTime,
-		rowsLimit,
+		commonRowsLimit,
 	)
 	if tweetHashtagErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -216,7 +218,7 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		"SELECT like_count, reply_count, retweet_count, quote_count, created_at FROM tweet_metrics WHERE rule_id = $1 AND created_at <= $2 ORDER BY created_at DESC LIMIT $3",
 		ruleID,
 		latestTime,
-		rowsLimit,
+		commonRowsLimit,
 	)
 	if tweetMetricIntervalErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -242,6 +244,39 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		}
 
 		resp.TweetMetrics.Interval = append(resp.TweetMetrics.Interval, data)
+	}
+
+	// Get tweet popularities
+	tweetPopularityRows, tweetPopularityErr := db.Query(
+		"SELECT tweet_id, popularity FROM tweet_popularities WHERE rule_id = $1 AND created_at <= $2 ORDER BY popularity DESC LIMIT $3",
+		ruleID,
+		latestTime,
+		popularityRowsLimit,
+	)
+	if tweetPopularityErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetPopularitiesDB.Error(),
+			"error":   tweetPopularityErr.Error(),
+		})
+		return
+	}
+	defer tweetPopularityRows.Close()
+
+	for tweetPopularityRows.Next() {
+		var data response.TweetPopularity
+
+		err := tweetPopularityRows.Scan(&data.TweetID, &data.Count)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": errFailedGetTweetPopularitiesDB.Error(),
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		resp.TweetPopularities = append(resp.TweetPopularities, data)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
