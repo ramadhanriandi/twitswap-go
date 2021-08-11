@@ -22,6 +22,7 @@ var (
 	errFailedGetTweetGeolocationsDB = errors.New("failed to get tweet geolocations from DB")
 	errFailedGetTweetHashtagsDB     = errors.New("failed to get tweet hashtags from DB")
 	errFailedGetTweetLanguagesDB    = errors.New("failed to get tweet languages from DB")
+	errFailedGetTweetMetricsDB      = errors.New("failed to get tweet metrics from DB")
 	errFailedParseTime              = errors.New("failed to parse time from query parameter")
 
 	// Limit
@@ -51,7 +52,7 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 
 	// Get tweet annotations
 	tweetAnnotationRows, tweetAnnotationErr := db.Query(
-		"SELECT name, SUM(count) AS total FROM tweet_annotations WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
+		"SELECT name, COALESCE(SUM(count), 0)  AS total FROM tweet_annotations WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
 		ruleID,
 		latestTime,
 		rowsLimit,
@@ -84,7 +85,7 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 
 	// Get tweet domains
 	tweetDomainRows, tweetDomainErr := db.Query(
-		"SELECT name, SUM(count) AS total FROM tweet_domains WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
+		"SELECT name, COALESCE(SUM(count), 0) AS total FROM tweet_domains WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
 		ruleID,
 		latestTime,
 		rowsLimit,
@@ -117,8 +118,9 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 
 	// Get tweet geolocations
 	tweetGeolocationRows, tweetGeolocationErr := db.Query(
-		"SELECT DISTINCT lat, long FROM tweet_geolocations WHERE rule_id = $1",
+		"SELECT DISTINCT lat, long FROM tweet_geolocations WHERE rule_id = $1 AND created_at <= $2",
 		ruleID,
+		latestTime,
 	)
 	if tweetGeolocationErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -148,7 +150,7 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 
 	// Get tweet hashtags
 	tweetHashtagRows, tweetHashtagErr := db.Query(
-		"SELECT name, SUM(count) AS total FROM tweet_hashtags WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
+		"SELECT name, COALESCE(SUM(count), 0) AS total FROM tweet_hashtags WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
 		ruleID,
 		latestTime,
 		rowsLimit,
@@ -180,8 +182,9 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 	}
 
 	// Get tweet languages
-	tweetLanguageQuery := "SELECT SUM(en_count), SUM(in_count), SUM(other_count) FROM tweet_languages WHERE rule_id = $1"
-	tweetLanguageErr := db.QueryRow(tweetLanguageQuery, ruleID).Scan(&resp.TweetLanguages.En, &resp.TweetLanguages.In, &resp.TweetLanguages.Other)
+	tweetLanguageQuery := "SELECT COALESCE(SUM(en_count), 0), COALESCE(SUM(in_count), 0),COALESCE(SUM(other_count), 0) FROM tweet_languages WHERE rule_id = $1 AND created_at <= $2"
+	tweetLanguageErr := db.QueryRow(tweetLanguageQuery, ruleID, latestTime).
+		Scan(&resp.TweetLanguages.En, &resp.TweetLanguages.In, &resp.TweetLanguages.Other)
 	if tweetLanguageErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -189,6 +192,56 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 			"error":   tweetLanguageErr.Error(),
 		})
 		return
+	}
+
+	// Get tweet metrics
+	tweetMetricCumulativeQuery := "SELECT COALESCE(SUM(like_count), 0), COALESCE(SUM(reply_count), 0), COALESCE(SUM(retweet_count), 0), COALESCE(SUM(quote_count), 0) FROM tweet_metrics WHERE rule_id = $1 AND created_at <= $2"
+	tweetMetricCumulativeErr := db.QueryRow(tweetMetricCumulativeQuery, ruleID, latestTime).
+		Scan(
+			&resp.TweetMetrics.Cumulative.Like,
+			&resp.TweetMetrics.Cumulative.Reply,
+			&resp.TweetMetrics.Cumulative.Retweet,
+			&resp.TweetMetrics.Cumulative.Quote,
+		)
+	if tweetMetricCumulativeErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetMetricsDB.Error(),
+			"error":   tweetMetricCumulativeErr.Error(),
+		})
+		return
+	}
+
+	tweetMetricIntervalRows, tweetMetricIntervalErr := db.Query(
+		"SELECT like_count, reply_count, retweet_count, quote_count, created_at FROM tweet_metrics WHERE rule_id = $1 AND created_at <= $2 ORDER BY created_at DESC LIMIT $3",
+		ruleID,
+		latestTime,
+		rowsLimit,
+	)
+	if tweetMetricIntervalErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetMetricsDB.Error(),
+			"error":   tweetMetricIntervalErr.Error(),
+		})
+		return
+	}
+	defer tweetMetricIntervalRows.Close()
+
+	for tweetMetricIntervalRows.Next() {
+		var data response.TweetMetricInterval
+
+		err := tweetMetricIntervalRows.Scan(&data.Like, &data.Reply, &data.Retweet, &data.Quote, &data.CreatedAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": errFailedGetTweetMetricsDB.Error(),
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		resp.TweetMetrics.Interval = append(resp.TweetMetrics.Interval, data)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
