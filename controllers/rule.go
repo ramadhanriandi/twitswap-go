@@ -249,7 +249,7 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 
 	// Get tweet popularities
 	tweetPopularityRows, tweetPopularityErr := db.Query(
-		"SELECT tweet_id, popularity FROM tweet_popularities WHERE rule_id = $1 AND created_at <= $2 ORDER BY popularity DESC LIMIT $3",
+		"SELECT tweet_id, COALESCE(SUM(popularity), 0) AS total FROM tweet_popularities WHERE rule_id = $1 AND created_at <= $2 GROUP BY tweet_id ORDER BY total DESC LIMIT $3",
 		ruleID,
 		latestTime,
 		popularityRowsLimit,
