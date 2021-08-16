@@ -24,7 +24,9 @@ var (
 	errFailedGetTweetLanguagesDB    = errors.New("failed to get tweet languages from DB")
 	errFailedGetTweetMetricsDB      = errors.New("failed to get tweet metrics from DB")
 	errFailedGetTweetPopularitiesDB = errors.New("failed to get tweet popularities from DB")
+	errFailedGetTweetSourcesDB      = errors.New("failed to get tweet sources from DB")
 	errFailedGetTweetTypesDB        = errors.New("failed to get tweet types from DB")
+	errFailedGetTweetWordsDB        = errors.New("failed to get tweet words from DB")
 	errFailedParseTime              = errors.New("failed to parse time from query parameter")
 
 	// Limit
@@ -185,7 +187,7 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 	}
 
 	// Get tweet languages
-	tweetLanguageQuery := "SELECT COALESCE(SUM(en_count), 0), COALESCE(SUM(in_count), 0),COALESCE(SUM(other_count), 0) FROM tweet_languages WHERE rule_id = $1 AND created_at <= $2"
+	tweetLanguageQuery := "SELECT COALESCE(SUM(en_count), 0), COALESCE(SUM(in_count), 0), COALESCE(SUM(other_count), 0) FROM tweet_languages WHERE rule_id = $1 AND created_at <= $2"
 	tweetLanguageErr := db.QueryRow(tweetLanguageQuery, ruleID, latestTime).
 		Scan(&resp.TweetLanguages.En, &resp.TweetLanguages.In, &resp.TweetLanguages.Other)
 	if tweetLanguageErr != nil {
@@ -280,6 +282,19 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		resp.TweetPopularities = append(resp.TweetPopularities, data)
 	}
 
+	// Get tweet sources
+	tweetSourceQuery := "SELECT COALESCE(SUM(web_count), 0), COALESCE(SUM(iphone_count), 0), COALESCE(SUM(android_count), 0), COALESCE(SUM(other_count), 0) FROM tweet_sources WHERE rule_id = $1 AND created_at <= $2"
+	tweetSourceErr := db.QueryRow(tweetSourceQuery, ruleID, latestTime).
+		Scan(&resp.TweetSources.Web, &resp.TweetSources.Iphone, &resp.TweetSources.Android, &resp.TweetSources.Other)
+	if tweetSourceErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetSourcesDB.Error(),
+			"error":   tweetSourceErr.Error(),
+		})
+		return
+	}
+
 	// Get tweet types
 	tweetTypeCumulativeQuery := "SELECT COALESCE(SUM(tweet_count), 0), COALESCE(SUM(retweet_count), 0), COALESCE(SUM(quote_count), 0), COALESCE(SUM(reply_count), 0) FROM tweet_types WHERE rule_id = $1 AND created_at <= $2"
 	tweetTypeCumulativeErr := db.QueryRow(tweetTypeCumulativeQuery, ruleID, latestTime).
@@ -328,6 +343,39 @@ func (s *RuleController) GetVisualizationByRuleID(c *gin.Context) {
 		}
 
 		resp.TweetTypes.Interval = append(resp.TweetTypes.Interval, data)
+	}
+
+	// Get tweet words
+	tweetWordRows, tweetWordErr := db.Query(
+		"SELECT name, COALESCE(SUM(count), 0) AS total FROM tweet_words WHERE rule_id = $1 AND created_at <= $2 GROUP BY name ORDER BY total DESC LIMIT $3",
+		ruleID,
+		latestTime,
+		commonRowsLimit,
+	)
+	if tweetWordErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": errFailedGetTweetWordsDB.Error(),
+			"error":   tweetWordErr.Error(),
+		})
+		return
+	}
+	defer tweetWordRows.Close()
+
+	for tweetWordRows.Next() {
+		var data response.TweetWord
+
+		err := tweetWordRows.Scan(&data.Name, &data.Count)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": errFailedGetTweetWordsDB.Error(),
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		resp.TweetWords = append(resp.TweetWords, data)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
