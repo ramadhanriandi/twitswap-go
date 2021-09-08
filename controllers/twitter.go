@@ -19,7 +19,7 @@ import (
 
 type TwitterController struct{}
 
-var (
+const (
 	// Twitter API v2 URLs
 	streamURL string = "https://api.twitter.com/2/tweets/search/stream?expansions=author_id,geo.place_id&tweet.fields=context_annotations,created_at,entities,geo,lang,possibly_sensitive,public_metrics,referenced_tweets,source"
 	rulesURL  string = "https://api.twitter.com/2/tweets/search/stream/rules"
